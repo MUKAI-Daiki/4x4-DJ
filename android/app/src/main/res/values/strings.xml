@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">4x4 DJ</string>
+    <string name="title_activity_main">4x4 DJ</string>
+    <string name="package_name">com.ritan.dj4x4</string>
+    <string name="custom_url_scheme">com.ritan.dj4x4</string>
+</resources>

@@ -1,0 +1,9 @@
+{
+  "appId": "com.ritan.dj4x4",
+  "appName": "4x4 DJ",
+  "webDir": "dist",
+  "backgroundColor": "#0a0b0e",
+  "server": {
+    "androidScheme": "https"
+  }
+}

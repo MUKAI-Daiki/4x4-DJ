@@ -1,0 +1,86 @@
+name: Build and Release Android APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Node Dependencies
+        run: npm ci
+
+      - name: Build Web Application
+        run: npm run build
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Grant Execute Permission for Gradlew
+        run: chmod +x android/gradlew
+
+      - name: Build Android APK
+        run: |
+          cd android
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Prepare APK Asset
+        id: prepare_asset
+        run: |
+          VERSION=${GITHUB_REF_NAME:-v1.0.0}
+          APK_SRC="android/app/build/outputs/apk/debug/app-debug.apk"
+          APK_DEST="4x4-DJ-${VERSION}.apk"
+          cp "$APK_SRC" "$APK_DEST"
+          echo "apk_path=$APK_DEST" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release and Upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "4x4 DJ ${{ steps.prepare_asset.outputs.version }}"
+          tag_name: ${{ steps.prepare_asset.outputs.version }}
+          draft: false
+          prerelease: false
+          files: ${{ steps.prepare_asset.outputs.apk_path }}
+          body: |
+            ## 🎮 4x4 DJ - 8-Bit Chiptune Sampler & Looper (Android APK)
+
+            ### 📦 Download & Install
+            1. Download `4x4-DJ-${{ steps.prepare_asset.outputs.version }}.apk` below.
+            2. Open the `.apk` on your Android phone/tablet/Chromebook.
+            3. Tap **Install** (allow installation from this source if prompted).
+
+            ### ✨ Highlights in this release
+            - Authentic NES 2A03 Chiptune Sound Synthesizer (Zero-Latency Live Pads)
+            - 1-Bar Loop Memory Sequencer with Overdub & Multi-layer Undo
+            - 6 Preset Chiptune BGM Grooves + Visualizer
+            - DJ Effects Rack (3-way Filter, 8-Bit Echo Delay, Space Reverb)
+            - Master 16-bit PCM WAV Lossless Recording & Mic Sampler
+            - High-performance, lightweight rendering & audio optimizations
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
