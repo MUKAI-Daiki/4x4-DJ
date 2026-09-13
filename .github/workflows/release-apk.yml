@@ -23,14 +23,14 @@ jobs:
           node-version: 22
           cache: 'npm'
 
-      - name: Set up JDK 21
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '21'
+          java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK Licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Install Node Dependencies
         run: npm ci
@@ -41,12 +41,10 @@ jobs:
       - name: Copy Web Assets to Android Project
         run: npx cap copy android
 
-      - name: Grant Execute Permission for Gradlew
-        run: chmod +x android/gradlew
-
       - name: Build Android APK
         run: |
           cd android
+          chmod +x gradlew
           ./gradlew assembleDebug --stacktrace
 
       - name: Prepare APK Asset
