@@ -20,7 +20,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Set up JDK 21
@@ -38,8 +38,8 @@ jobs:
       - name: Build Web Application
         run: npm run build
 
-      - name: Sync Capacitor Android
-        run: npx cap sync android
+      - name: Copy Web Assets to Android Project
+        run: npx cap copy android
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x android/gradlew
