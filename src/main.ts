@@ -11,14 +11,22 @@ const engine = new AudioEngine();
 const tapTimes: number[] = [];
 let tapResetTimer: number | null = null;
 
-// Quick Mic Sampling (Mode A) State
+// Quick Mic Sampling & 3-Second Countdown State
 let activeSamplingPadId: number | null = null;
-let samplingHoldTimer: number | null = null;
+let countingDownPadId: number | null = null;
+let countdownTimer: number | null = null;
+let countdownRemaining = 3;
 let samplingStartTime = 0;
 
 // Audio Master Recording State
 let recordIntervalId: number | null = null;
 let recordDownloadUrl: string | null = null;
+
+// Prevent Context Menu on long-press or right-click across the entire application
+window.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  return false;
+});
 
 // Render Main App Structure
 const app = document.getElementById('app')!;
@@ -33,10 +41,10 @@ app.innerHTML = `
         </svg>
         4x4 DJ
       </div>
-      <span class="brand-badge">8-BIT CHIPTUNE</span>
+      <span class="brand-badge">CHIPTUNE</span>
       <div class="header-status-led">
         <span class="led-dot active" id="audioLed"></span>
-        <span id="audioStatusText">NES 2A03 READY</span>
+        <span id="audioStatusText">ONLINE</span>
       </div>
     </div>
 
@@ -53,10 +61,12 @@ app.innerHTML = `
   <main class="dj-main">
     <!-- LEFT COLUMN: 4x4 Pad Arena -->
     <section class="pad-arena">
-      <!-- Quick Sampling Status Banner -->
+      <!-- Quick Sampling / Countdown Status Banner -->
       <div class="mic-assign-banner" id="micAssignBanner">
-        <span class="mic-assign-text" id="micBannerText">SAMPLING MIC TO PAD... RELEASE OR TAP TO SAVE</span>
-        <button class="mic-assign-cancel-btn" id="btnCancelMicAssign">CANCEL</button>
+        <span class="mic-assign-text" id="micBannerText">
+          <span>●</span> <span>RECORDING MIC TO PAD...</span>
+        </span>
+        <button class="mic-assign-cancel-btn" id="btnCancelMicAssign" title="Cancel">✕</button>
       </div>
 
       <div class="pad-arena-inner">
@@ -75,12 +85,12 @@ app.innerHTML = `
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
             </svg>
-            RHYTHM VISUALIZER
+            VISUALIZER
           </span>
           <div class="visualizer-meta-row">
-            <button class="btn-quantize active" id="btnQuantize" title="Recording Quantize Grid: 1/16 (Live pad response is always immediate zero-latency)">QNTZ: 1/16</button>
-            <span style="margin-left: 12px;">BAR <span class="counter-value" id="barCounter">01</span></span>
-            <span style="margin-left: 10px;">BEAT <span class="counter-value" id="beatCounter">1</span></span>
+            <button class="btn-quantize active" id="btnQuantize" title="Quantize Grid">⊞ 1/16</button>
+            <span style="margin-left: 12px;">▮ <span class="counter-value" id="barCounter">01</span></span>
+            <span style="margin-left: 10px;">● <span class="counter-value" id="beatCounter">1</span></span>
           </div>
         </div>
 
@@ -106,7 +116,7 @@ app.innerHTML = `
         </div>
       </div>
 
-      <!-- 2. 1-Bar Loop Memory Sequencer (メモリー機能) -->
+      <!-- 2. 1-Bar Loop Memory Sequencer -->
       <div class="rack-card memory-card" id="memoryCard">
         <div class="rack-card-hdr">
           <span class="rack-card-title">
@@ -114,66 +124,62 @@ app.innerHTML = `
               <circle cx="12" cy="12" r="10"/>
               <path d="M12 6v6l4 2"/>
             </svg>
-            1-BAR LOOP MEMORY
+            LOOP MEMORY
           </span>
           <div class="memory-meta-badges">
             <span class="memory-status-tag idle" id="memoryStatusTag">IDLE</span>
-            <span class="memory-stat-badge"><span id="memNotesCount">0</span> NOTES</span>
-            <span class="memory-stat-badge"><span id="memLayersCount">0</span> LAYS</span>
+            <span class="memory-stat-badge">♪ <span id="memNotesCount">0</span></span>
+            <span class="memory-stat-badge">≡ <span id="memLayersCount">0</span></span>
           </div>
         </div>
 
         <div class="memory-controls-grid">
           <!-- Row 1: Primary Loop Action Buttons -->
           <div class="memory-primary-actions">
-            <button class="btn-memory-rec" id="btnMemoryRec" title="Arm / Disarm 1-Bar Recording (Overdub) [Key: M]">
+            <button class="btn-memory-rec" id="btnMemoryRec" title="1-Bar Recording (Overdub) [Key: M]">
               <span class="led-dot" id="memRecLed" style="width:10px; height:10px;"></span>
-              <span id="memRecText">REC / DUB</span>
+              <span id="memRecText">● REC</span>
             </button>
 
-            <button class="btn-memory-play active" id="btnMemoryPlay" title="Toggle 1-Bar Loop Playback [Key: P]">
+            <button class="btn-memory-play active" id="btnMemoryPlay" title="Toggle Loop Playback [Key: P]">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" id="memPlayIcon">
                 <rect x="6" y="4" width="4" height="16"/>
                 <rect x="14" y="4" width="4" height="16"/>
               </svg>
-              <span id="memPlayText">LOOP ON</span>
+              <span id="memPlayText">PLAY</span>
             </button>
           </div>
 
-          <!-- Row 2: Secondary Memory Management Buttons -->
+          <!-- Row 2: Secondary Memory Management Buttons (Icon-Only Minimal) -->
           <div class="memory-secondary-actions">
-            <button class="btn-memory-tool" id="btnMemoryUndo" title="Undo last recorded layer [Backspace]" disabled>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <button class="btn-memory-tool" id="btnMemoryUndo" title="Undo [Backspace]" disabled>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M3 7v6h6"/>
                 <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>
               </svg>
-              UNDO
             </button>
 
-            <button class="btn-memory-tool" id="btnMemoryClear" title="Clear all recorded memory events">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <button class="btn-memory-tool" id="btnMemoryClear" title="Clear Loop">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polyline points="3 6 5 6 21 6"/>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
               </svg>
-              CLEAR
             </button>
 
-            <button class="btn-memory-tool" id="btnMemorySave" title="Save loop memory pattern to Local Storage">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <button class="btn-memory-tool" id="btnMemorySave" title="Save Pattern">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                 <polyline points="17 21 17 13 7 13 7 21"/>
                 <polyline points="7 3 7 8 15 8"/>
               </svg>
-              SAVE
             </button>
 
-            <button class="btn-memory-tool" id="btnMemoryLoad" title="Load loop memory pattern from Local Storage">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <button class="btn-memory-tool" id="btnMemoryLoad" title="Load Pattern">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              LOAD
             </button>
           </div>
 
@@ -192,7 +198,7 @@ app.innerHTML = `
               <circle cx="12" cy="12" r="10"/>
               <polygon points="10 8 16 12 10 16 10 8"/>
             </svg>
-            CHIPTUNE BGM / CLOCK
+            BGM
           </span>
           <div style="display:flex; align-items:center; gap:8px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -208,13 +214,13 @@ app.innerHTML = `
             ${BGM_PRESETS.map(p => `<option value="${p.id}">${p.name} (${p.category})</option>`).join('')}
           </select>
 
-          <button class="btn-transport" id="btnPlayBgm" title="Play / Pause Chiptune BGM">
+          <button class="btn-transport" id="btnPlayBgm" title="Play / Pause BGM [Space]">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="5 3 19 12 5 21 5 3"/>
             </svg>
           </button>
 
-          <button class="btn-transport" id="btnStopBgm" title="Stop & Reset">
+          <button class="btn-transport" id="btnStopBgm" title="Stop">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
               <rect x="4" y="4" width="16" height="16" rx="2"/>
             </svg>
@@ -230,29 +236,29 @@ app.innerHTML = `
               <circle cx="12" cy="12" r="10"/>
               <polyline points="12 6 12 12 16 14"/>
             </svg>
-            TEMPO / BPM
+            TEMPO
           </span>
         </div>
 
         <div class="bpm-row">
           <div class="bpm-display-box">
-            <span class="bpm-label">TEMPO</span>
+            <span class="bpm-label">BPM</span>
             <span class="bpm-num" id="bpmDisplay">136</span>
           </div>
 
           <div class="bpm-slider-wrap">
             <input type="range" id="bpmSlider" min="50" max="220" value="136" class="dj-slider" />
             <div class="bpm-btn-group">
-              <button class="btn-nudge" id="btnBpmMinus">-1</button>
-              <button class="btn-nudge" id="btnBpmPlus">+1</button>
+              <button class="btn-nudge" id="btnBpmMinus" title="Tempo -1">−</button>
+              <button class="btn-nudge" id="btnBpmPlus" title="Tempo +1">＋</button>
             </div>
           </div>
 
-          <button class="btn-tap-bpm" id="btnTapBpm" title="Tap repeatedly to set tempo">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <button class="btn-tap-bpm" id="btnTapBpm" title="Tap tempo">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
             </svg>
-            TAP BPM
+            TAP
           </button>
         </div>
       </div>
@@ -264,32 +270,32 @@ app.innerHTML = `
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>
             </svg>
-            EFFECTS
+            FX
           </span>
         </div>
 
         <div class="fx-grid">
           <!-- Filter Module -->
           <div class="fx-module">
-            <span class="fx-module-title">DJ FILTER</span>
+            <span class="fx-module-title">FILTER</span>
             <input type="range" id="fxFilterSlider" min="-1" max="1" step="0.05" value="0" class="dj-slider" />
             <div class="fx-filter-center-label">
               <span>LPF</span>
-              <span style="color:var(--neon-cyan); font-weight:bold;">OFF</span>
+              <span style="color:var(--neon-cyan); font-weight:bold;">●</span>
               <span>HPF</span>
             </div>
           </div>
 
           <!-- Delay Module -->
           <div class="fx-module">
-            <span class="fx-module-title">8-BIT ECHO</span>
+            <span class="fx-module-title">ECHO</span>
             <button class="fx-toggle-btn" id="btnFxDelay">DLY OFF</button>
             <input type="range" id="fxDelayFeedback" min="0.1" max="0.8" step="0.05" value="0.45" class="dj-slider" title="Echo Feedback" />
           </div>
 
           <!-- Reverb Module -->
           <div class="fx-module">
-            <span class="fx-module-title">SPACE REV</span>
+            <span class="fx-module-title">REV</span>
             <button class="fx-toggle-btn rev" id="btnFxReverb">REV OFF</button>
             <input type="range" id="fxReverbMix" min="0" max="0.9" step="0.05" value="0.4" class="dj-slider" title="Reverb Amount" />
           </div>
@@ -306,14 +312,14 @@ app.innerHTML = `
                 <circle cx="12" cy="12" r="10"/>
                 <circle cx="12" cy="12" r="3" fill="currentColor"/>
               </svg>
-              RECORD ARRANGEMENT (16-BIT PCM WAV)
+              MASTER REC (WAV)
             </span>
-            <span style="font-family:var(--font-mono); font-size:0.9rem; font-weight:700; color:var(--text-muted);" id="recTime">00:00</span>
+            <span style="font-size:0.9rem; font-weight:700; color:var(--text-muted);" id="recTime">00:00</span>
           </div>
           <div style="display:flex; gap:12px; align-items:center;">
             <button class="btn-action-tool" id="btnRecordMaster" style="flex:1;">
               <span class="led-dot" id="recLed" style="width:8px; height:8px;"></span>
-              <span id="recBtnText">START MASTER REC</span>
+              <span id="recBtnText">● REC</span>
             </button>
             <div id="wavDownloadContainer"></div>
           </div>
@@ -326,6 +332,55 @@ app.innerHTML = `
 // --- Build 4x4 Pad Grid Elements ---
 const padGrid = document.getElementById('padGrid')!;
 const padElementMap = new Map<number, HTMLElement>();
+
+function isSamplingOrCounting(): boolean {
+  return activeSamplingPadId !== null || countingDownPadId !== null;
+}
+
+function updateQuickRecButtonsState(): void {
+  const bgmPlaying = engine.bgm.getIsPlaying();
+  const samplingActive = isSamplingOrCounting();
+
+  document.querySelectorAll<HTMLElement>('.pad-quick-rec-btn').forEach((btn) => {
+    const padId = Number(btn.getAttribute('data-rec-id'));
+    if (activeSamplingPadId === padId) {
+      btn.classList.add('recording');
+      btn.classList.remove('disabled');
+    } else if (bgmPlaying || samplingActive) {
+      btn.classList.remove('recording');
+      btn.classList.add('disabled');
+    } else {
+      btn.classList.remove('recording');
+      btn.classList.remove('disabled');
+    }
+  });
+}
+
+function applyExclusiveLock(targetPadId: number | null, lock: boolean): void {
+  // Lock or unlock non-target pads
+  PAD_DEFINITIONS.forEach((def) => {
+    const el = padElementMap.get(def.id);
+    if (el) {
+      if (lock && def.id !== targetPadId) {
+        el.classList.add('pad-muted');
+      } else {
+        el.classList.remove('pad-muted');
+      }
+    }
+  });
+
+  // Lock or unlock BGM controls & transport
+  const bgmSection = document.querySelector('.bgm-controls-row');
+  const memorySection = document.querySelector('.memory-controls-grid');
+  if (bgmSection) {
+    if (lock) bgmSection.classList.add('transport-locked');
+    else bgmSection.classList.remove('transport-locked');
+  }
+  if (memorySection) {
+    if (lock) memorySection.classList.add('transport-locked');
+    else memorySection.classList.remove('transport-locked');
+  }
+}
 
 function renderPads(): void {
   padGrid.innerHTML = '';
@@ -345,10 +400,11 @@ function renderPads(): void {
       </div>
       <div class="pad-center">
         <div class="pad-indicator-dot"></div>
+        <div class="pad-countdown-display" id="padCountdown-${def.id}">3</div>
       </div>
       <div class="pad-bottom-meta">
         <span class="pad-title" id="padTitle-${def.id}">${def.name}</span>
-        <button class="pad-quick-rec-btn" data-rec-id="${def.id}" title="Quick Mic Sample to Pad ${def.id}">
+        <button class="pad-quick-rec-btn" data-rec-id="${def.id}" title="Mic Record to Pad ${def.id}">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <circle cx="12" cy="12" r="7"/>
           </svg>
@@ -356,77 +412,53 @@ function renderPads(): void {
       </div>
     `;
 
-    // Multi-touch Pointer Events
+    // Multi-touch Pointer Events - Direct instant trigger only (Long-press recording removed)
     pad.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      // Track long-press for sampling mode (Method A)
-      samplingHoldTimer = window.setTimeout(() => {
-        startQuickMicSampling(def.id);
-      }, 500);
-
       onPadTrigger(def.id);
     });
 
     pad.addEventListener('pointerup', (e) => {
       e.preventDefault();
-      if (samplingHoldTimer) {
-        window.clearTimeout(samplingHoldTimer);
-        samplingHoldTimer = null;
-      }
-      if (activeSamplingPadId === def.id) {
-        finishQuickMicSampling(def.id);
-      }
       onPadRelease(def.id);
     });
 
     pad.addEventListener('pointercancel', (e) => {
       e.preventDefault();
-      if (samplingHoldTimer) {
-        window.clearTimeout(samplingHoldTimer);
-        samplingHoldTimer = null;
-      }
-      if (activeSamplingPadId === def.id) {
-        finishQuickMicSampling(def.id);
-      }
       onPadRelease(def.id);
     });
 
     pad.addEventListener('pointerleave', (e) => {
       e.preventDefault();
-      if (samplingHoldTimer) {
-        window.clearTimeout(samplingHoldTimer);
-        samplingHoldTimer = null;
-      }
       onPadRelease(def.id);
     });
 
-    // Quick Mic assignment button inside pad
+    // Quick Mic assignment button inside pad - ONLY method to initiate mic recording
     const quickRecBtn = pad.querySelector('.pad-quick-rec-btn') as HTMLElement;
     quickRecBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (activeSamplingPadId === def.id) {
-        finishQuickMicSampling(def.id);
-      } else {
-        startQuickMicSampling(def.id);
-      }
+      handleQuickRecButtonClick(def.id);
     });
 
     padGrid.appendChild(pad);
     padElementMap.set(def.id, pad);
   });
+
+  updateQuickRecButtonsState();
 }
 
 renderPads();
 
 // --- Pad Interaction & Multi-Touch Logic ---
 function onPadTrigger(padId: number): void {
-  // If this pad is currently being sampled into, don't trigger sound
-  if (activeSamplingPadId === padId) return;
+  // Prohibit pad triggers while recording or in countdown
+  if (isSamplingOrCounting()) return;
 
   // If memory recording is armed but BGM transport is stopped, auto-start transport so 1-bar cycle runs
   if (engine.memory.getIsRecording() && !engine.bgm.getIsPlaying()) {
     engine.bgm.play();
     updateBgmPlayButton(true);
+    updateQuickRecButtonsState();
   }
 
   const el = padElementMap.get(padId);
@@ -449,6 +481,8 @@ function onPadTrigger(padId: number): void {
 }
 
 function onPadRelease(padId: number): void {
+  if (isSamplingOrCounting()) return;
+
   const el = padElementMap.get(padId);
   if (el && !el.classList.contains('queued')) {
     el.classList.remove('active');
@@ -473,6 +507,9 @@ const keyPadMap: Record<string, number> = {
 window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+
+  // Prohibit all keys if recording or countdown is active
+  if (isSamplingOrCounting()) return;
 
   // Space for BGM Play/Pause
   if (e.code === 'Space') {
@@ -509,16 +546,113 @@ window.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('keyup', (e) => {
+  if (isSamplingOrCounting()) return;
+
   const padId = keyPadMap[e.key];
   if (padId !== undefined) {
     onPadRelease(padId);
   }
 });
 
-// --- Method A: Quick Mic Sampling Engine ---
+// --- Quick Mic Sampling with 3-Second Countdown & Exclusive Lock ---
 const micAssignBanner = document.getElementById('micAssignBanner')!;
 const micBannerText = document.getElementById('micBannerText')!;
 const btnCancelMicAssign = document.getElementById('btnCancelMicAssign')!;
+
+let warningBannerTimeout: number | null = null;
+function showMicBannerWarning(msg: string): void {
+  micBannerText.innerHTML = `<span>⚠</span> <span>${msg}</span>`;
+  micAssignBanner.className = 'mic-assign-banner warning show';
+  if (warningBannerTimeout) window.clearTimeout(warningBannerTimeout);
+  warningBannerTimeout = window.setTimeout(() => {
+    if (!isSamplingOrCounting()) {
+      micAssignBanner.className = 'mic-assign-banner';
+    }
+  }, 2500);
+}
+
+function handleQuickRecButtonClick(padId: number): void {
+  // 1. If currently recording this pad, tap 〇 saves and completes recording
+  if (activeSamplingPadId === padId) {
+    finishQuickMicSampling(padId);
+    return;
+  }
+
+  // 2. If counting down on this pad, tap 〇 cancels
+  if (countingDownPadId === padId) {
+    cancelCountdown();
+    return;
+  }
+
+  // 3. If another pad is already recording or counting down, ignore
+  if (isSamplingOrCounting()) {
+    return;
+  }
+
+  // 4. Check BGM playback: Do NOT allow recording while BGM is playing
+  if (engine.bgm.getIsPlaying()) {
+    showMicBannerWarning('BGM再生中は録音できません (BGMを停止してください)');
+    return;
+  }
+
+  // 5. Start 3-second countdown
+  startCountdown(padId);
+}
+
+function startCountdown(padId: number): void {
+  cancelCountdown();
+  countingDownPadId = padId;
+  countdownRemaining = 3;
+
+  applyExclusiveLock(padId, true);
+  updateQuickRecButtonsState();
+
+  const targetPad = padElementMap.get(padId);
+  if (targetPad) {
+    targetPad.classList.add('rec-countdown');
+    const cdDisplay = document.getElementById(`padCountdown-${padId}`);
+    if (cdDisplay) cdDisplay.textContent = '3';
+  }
+
+  micBannerText.innerHTML = `<span>⏱</span> <span>COUNTDOWN: ${countdownRemaining}...</span>`;
+  micAssignBanner.className = 'mic-assign-banner countdown show';
+
+  countdownTimer = window.setInterval(() => {
+    countdownRemaining--;
+    if (countdownRemaining > 0) {
+      const cdDisplay = document.getElementById(`padCountdown-${padId}`);
+      if (cdDisplay) cdDisplay.textContent = String(countdownRemaining);
+      micBannerText.innerHTML = `<span>⏱</span> <span>COUNTDOWN: ${countdownRemaining}...</span>`;
+    } else {
+      if (countdownTimer) {
+        window.clearInterval(countdownTimer);
+        countdownTimer = null;
+      }
+      countingDownPadId = null;
+      if (targetPad) {
+        targetPad.classList.remove('rec-countdown');
+      }
+      startQuickMicSampling(padId);
+    }
+  }, 1000);
+}
+
+function cancelCountdown(): void {
+  if (countdownTimer) {
+    window.clearInterval(countdownTimer);
+    countdownTimer = null;
+  }
+  if (countingDownPadId !== null) {
+    const pad = padElementMap.get(countingDownPadId);
+    if (pad) {
+      pad.classList.remove('rec-countdown');
+    }
+    countingDownPadId = null;
+  }
+  applyExclusiveLock(null, false);
+  micAssignBanner.className = 'mic-assign-banner';
+  updateQuickRecButtonsState();
+}
 
 async function startQuickMicSampling(padId: number): Promise<void> {
   await engine.init();
@@ -527,6 +661,7 @@ async function startQuickMicSampling(padId: number): Promise<void> {
   const started = await engine.mic.startRecording(padId);
   if (!started) {
     alert('Microphone permission required for sampling.');
+    cancelCountdown();
     return;
   }
 
@@ -536,14 +671,14 @@ async function startQuickMicSampling(padId: number): Promise<void> {
   const el = padElementMap.get(padId);
   if (el) el.classList.add('rec-target');
 
-  micBannerText.textContent = `● RECORDING MIC TO PAD ${String(padId).padStart(2, '0')}... (TAP OR RELEASE TO ASSIGN)`;
-  micAssignBanner.classList.add('show');
+  micBannerText.innerHTML = `<span>●</span> <span>RECORDING PAD ${String(padId).padStart(2, '0')}... (TAP 〇 TO SAVE)</span>`;
+  micAssignBanner.className = 'mic-assign-banner show';
+  updateQuickRecButtonsState();
 }
 
 async function finishQuickMicSampling(padId: number): Promise<void> {
   if (activeSamplingPadId !== padId) return;
 
-  // Minimum 100ms recording duration
   const elapsed = Date.now() - samplingStartTime;
   if (elapsed < 150) {
     await new Promise(r => setTimeout(r, 200 - elapsed));
@@ -554,7 +689,10 @@ async function finishQuickMicSampling(padId: number): Promise<void> {
 
   const el = padElementMap.get(padId);
   if (el) el.classList.remove('rec-target');
-  micAssignBanner.classList.remove('show');
+  micAssignBanner.className = 'mic-assign-banner';
+
+  applyExclusiveLock(null, false);
+  updateQuickRecButtonsState();
 
   if (result && result.buffer) {
     engine.setPadBuffer(padId, result.buffer, `MIC REC`);
@@ -570,13 +708,17 @@ async function finishQuickMicSampling(padId: number): Promise<void> {
 }
 
 btnCancelMicAssign.addEventListener('click', async () => {
-  if (activeSamplingPadId !== null) {
+  if (countingDownPadId !== null) {
+    cancelCountdown();
+  } else if (activeSamplingPadId !== null) {
     const padId = activeSamplingPadId;
     activeSamplingPadId = null;
     await engine.mic.stopRecording();
     const el = padElementMap.get(padId);
     if (el) el.classList.remove('rec-target');
-    micAssignBanner.classList.remove('show');
+    applyExclusiveLock(null, false);
+    micAssignBanner.className = 'mic-assign-banner';
+    updateQuickRecButtonsState();
   }
 });
 
@@ -694,6 +836,9 @@ function updateBgmPlayButton(isPlaying: boolean): void {
 }
 
 async function toggleBgmTransport(): Promise<void> {
+  // Prohibit BGM playback during sampling or countdown
+  if (isSamplingOrCounting()) return;
+
   await engine.init();
   if (engine.bgm.getIsPlaying()) {
     engine.bgm.pause();
@@ -702,6 +847,7 @@ async function toggleBgmTransport(): Promise<void> {
     engine.bgm.play();
     updateBgmPlayButton(true);
   }
+  updateQuickRecButtonsState();
 }
 
 btnPlayBgm.addEventListener('click', async () => {
@@ -711,6 +857,7 @@ btnPlayBgm.addEventListener('click', async () => {
 btnStopBgm.addEventListener('click', () => {
   engine.bgm.stop();
   updateBgmPlayButton(false);
+  updateQuickRecButtonsState();
 });
 
 bgmSelect.addEventListener('change', () => {
@@ -798,24 +945,24 @@ engine.memory.onUpdate = (state) => {
   if (state.isRecording) {
     btnMemoryRec.classList.add('recording');
     memRecLed.classList.add('rec');
-    memRecText.textContent = 'RECORDING';
+    memRecText.textContent = '● REC';
   } else {
     btnMemoryRec.classList.remove('recording');
     memRecLed.classList.remove('rec');
-    memRecText.textContent = 'REC / DUB';
+    memRecText.textContent = '● REC';
   }
 
   // Play button styling
   if (state.isPlaying) {
     btnMemoryPlay.classList.add('active');
-    memPlayText.textContent = 'LOOP ON';
+    memPlayText.textContent = 'PAUSE';
     memPlayIcon.innerHTML = `
       <rect x="6" y="4" width="4" height="16"/>
       <rect x="14" y="4" width="4" height="16"/>
     `;
   } else {
     btnMemoryPlay.classList.remove('active');
-    memPlayText.textContent = 'LOOP MUTED';
+    memPlayText.textContent = 'PLAY';
     memPlayIcon.innerHTML = `
       <polygon points="5 3 19 12 5 21 5 3"/>
     `;
@@ -830,6 +977,9 @@ engine.memory.onUpdate = (state) => {
 
 // Pad visual illumination on loop triggers
 engine.memory.onPadTrigger = (padId: number, delayMs: number) => {
+  // Prohibit loop pad triggers while sampling or countdown
+  if (isSamplingOrCounting()) return;
+
   window.setTimeout(() => {
     const el = padElementMap.get(padId);
     if (el) {
@@ -841,6 +991,8 @@ engine.memory.onPadTrigger = (padId: number, delayMs: number) => {
 
 // Toggle REC / OVERDUB
 async function toggleMemoryRecord(): Promise<void> {
+  if (isSamplingOrCounting()) return;
+
   await engine.init();
   const willRecord = !engine.memory.getIsRecording();
 
@@ -848,6 +1000,7 @@ async function toggleMemoryRecord(): Promise<void> {
   if (willRecord && !engine.bgm.getIsPlaying()) {
     engine.bgm.play();
     updateBgmPlayButton(true);
+    updateQuickRecButtonsState();
   }
 
   engine.memory.setRecording(willRecord);
@@ -860,6 +1013,8 @@ async function toggleMemoryRecord(): Promise<void> {
 
 // Toggle LOOP PLAY / MUTE
 async function toggleMemoryPlay(): Promise<void> {
+  if (isSamplingOrCounting()) return;
+
   await engine.init();
   const willPlay = !engine.memory.getIsPlaying();
   engine.memory.setPlaying(willPlay);
@@ -867,6 +1022,7 @@ async function toggleMemoryPlay(): Promise<void> {
   if (willPlay && !engine.bgm.getIsPlaying() && engine.memory.getEventCount() > 0) {
     engine.bgm.play();
     updateBgmPlayButton(true);
+    updateQuickRecButtonsState();
   }
 
   setTicker(willPlay ? 'LOOP PLAYBACK ON' : 'LOOP PLAYBACK MUTED');
@@ -1046,7 +1202,7 @@ btnRecordMaster.addEventListener('click', async () => {
     engine.recorder.start();
     btnRecordMaster.classList.add('recording');
     recLed.classList.add('rec');
-    recBtnText.textContent = 'STOP RECORDING';
+    recBtnText.textContent = '■ STOP';
     wavDownloadContainer.innerHTML = '';
 
     const startMs = Date.now();
@@ -1066,7 +1222,7 @@ btnRecordMaster.addEventListener('click', async () => {
     const result = engine.recorder.stop();
     btnRecordMaster.classList.remove('recording');
     recLed.classList.remove('rec');
-    recBtnText.textContent = 'START MASTER REC';
+    recBtnText.textContent = '● REC';
 
     if (result) {
       if (recordDownloadUrl) {

@@ -4,7 +4,7 @@
   --bg-surface: #11131a;
   --bg-card: #161922;
   --bg-card-hover: #1d212e;
-  --bg-pad-base: #141720;
+  --bg-pad-base: #272b36; /* Slightly grayish industrial hardware pad */
   --border-dim: #232838;
   --border-bright: #363d54;
 
@@ -21,15 +21,15 @@
   --neon-purple-glow: rgba(213, 0, 249, 0.4);
   --neon-yellow: #ffd600;
 
-  /* Typography */
-  --font-digital: 'Syne', sans-serif;
+  /* Typography - Proportional Only (No Monospace) */
+  --font-digital: 'Syne', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-ui: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'Space Mono', 'JetBrains Mono', monospace;
+  --font-mono: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* Text Colors */
   --text-main: #f0f3f8;
   --text-muted: #7b8499;
-  --text-dim: #444c61;
+  --text-dim: #505970;
 
   /* Hardware Feel */
   --pad-radius: 8px;
@@ -44,6 +44,7 @@
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
 
@@ -247,53 +248,45 @@ html, body {
   touch-action: none;
 }
 
-/* Pad Button */
+/* Pad Button - Enclosed with vivid category color, grayish hardware pad surface */
 .dj-pad {
   position: relative;
   background: var(--bg-pad-base);
-  border: 2px solid var(--border-dim);
+  border: 2.5px solid var(--pad-accent-color, var(--neon-cyan)); /* 色でパッドを全周囲む */
   border-radius: var(--pad-radius);
   cursor: pointer;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 6px 8px;
-  box-shadow: 0 4px 6px var(--bevel-dark), inset 0 1px 1px var(--bevel-light);
-  transition: transform 0.05s ease, background 0.1s ease, border-color 0.1s ease, box-shadow 0.1s ease;
+  padding: 7px 8px;
+  box-shadow: 0 4px 10px var(--bevel-dark), inset 0 0 10px color-mix(in srgb, var(--pad-accent-color, var(--neon-cyan)) 18%, transparent);
+  transition: transform 0.05s ease, background 0.12s ease, border-color 0.12s ease, box-shadow 0.15s ease, opacity 0.2s ease;
   touch-action: none;
   overflow: hidden;
-}
-
-.dj-pad::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--pad-accent-color, var(--neon-cyan));
-  opacity: 0.75;
-  transition: opacity 0.1s;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .dj-pad:hover {
-  border-color: var(--border-bright);
-  background: var(--bg-card-hover);
+  border-color: var(--pad-accent-color, var(--neon-cyan));
+  background: color-mix(in srgb, var(--bg-pad-base) 82%, white 18%);
+  box-shadow: 0 0 14px var(--pad-glow-color, var(--neon-cyan-glow)), inset 0 0 14px color-mix(in srgb, var(--pad-accent-color, var(--neon-cyan)) 30%, transparent);
 }
 
 .dj-pad.active {
   transform: scale(0.96) translateY(2px);
-  background: color-mix(in srgb, var(--pad-accent-color, var(--neon-cyan)) 30%, var(--bg-pad-base));
-  border-color: var(--pad-accent-color, var(--neon-cyan));
-  box-shadow: 0 0 20px var(--pad-glow-color, var(--neon-cyan-glow)), inset 0 0 12px var(--pad-accent-color, var(--neon-cyan));
+  background: color-mix(in srgb, var(--pad-accent-color, var(--neon-cyan)) 40%, var(--bg-pad-base));
+  border-color: #ffffff;
+  box-shadow: 0 0 24px var(--pad-glow-color, var(--neon-cyan-glow)), inset 0 0 16px var(--pad-accent-color, var(--neon-cyan));
 }
 
 /* Pad Triggered by Memory Loop Playback */
 .dj-pad.loop-active {
   transform: scale(0.97);
   background: color-mix(in srgb, var(--pad-accent-color, var(--neon-cyan)) 35%, var(--bg-pad-base));
-  border-color: var(--pad-accent-color, var(--neon-cyan));
-  box-shadow: 0 0 16px var(--pad-glow-color, var(--neon-cyan-glow)), inset 0 0 8px var(--pad-accent-color, var(--neon-cyan));
+  border-color: #ffffff;
+  box-shadow: 0 0 18px var(--pad-glow-color, var(--neon-cyan-glow)), inset 0 0 10px var(--pad-accent-color, var(--neon-cyan));
 }
 
 .dj-pad.loop-active .pad-indicator-dot {
@@ -304,8 +297,8 @@ html, body {
 
 /* Pad Queued for Next Quantize Beat */
 .dj-pad.queued {
-  border-color: var(--neon-cyan);
-  box-shadow: 0 0 10px var(--neon-cyan-glow);
+  border-color: #ffffff;
+  box-shadow: 0 0 12px var(--pad-glow-color, var(--neon-cyan-glow));
   animation: padQueuePulse 0.15s infinite alternate;
 }
 
@@ -314,14 +307,29 @@ html, body {
   100% { opacity: 1.0; transform: scale(1.0); }
 }
 
+/* Pad Targeted for Quick Sampling (Recording Active) */
 .dj-pad.rec-target {
-  border-color: var(--neon-red);
+  border-color: var(--neon-red) !important;
+  box-shadow: 0 0 24px var(--neon-red-glow), inset 0 0 14px var(--neon-red) !important;
   animation: padRecBlink 0.6s infinite alternate;
 }
 
 @keyframes padRecBlink {
-  0% { box-shadow: 0 0 5px var(--neon-red-glow); }
-  100% { box-shadow: 0 0 20px var(--neon-red-glow), inset 0 0 10px var(--neon-red); }
+  0% { box-shadow: 0 0 8px var(--neon-red-glow); }
+  100% { box-shadow: 0 0 28px var(--neon-red-glow), inset 0 0 16px var(--neon-red); }
+}
+
+/* Pad Countdown State (3, 2, 1 before recording) */
+.dj-pad.rec-countdown {
+  border-color: var(--neon-orange) !important;
+  box-shadow: 0 0 20px var(--neon-orange-glow), inset 0 0 12px var(--neon-orange) !important;
+}
+
+/* Pad Disabled State when recording into another pad or during exclusive mode */
+.dj-pad.pad-muted {
+  opacity: 0.35 !important;
+  pointer-events: none !important;
+  filter: grayscale(40%);
 }
 
 .pad-top-meta {
@@ -333,21 +341,22 @@ html, body {
 
 .pad-num {
   font-family: var(--font-digital);
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   font-weight: 700;
   color: var(--text-muted);
-  opacity: 0.85;
+  opacity: 0.9;
+  font-variant-numeric: tabular-nums;
 }
 
 .pad-key {
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-family: var(--font-ui);
+  font-size: 0.65rem;
   font-weight: 700;
   color: var(--pad-accent-color, var(--text-muted));
-  background: rgba(0, 0, 0, 0.45);
-  padding: 1px 4px;
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.55);
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .pad-center {
@@ -355,6 +364,7 @@ html, body {
   align-items: center;
   justify-content: center;
   flex: 1;
+  position: relative;
 }
 
 .pad-indicator-dot {
@@ -371,6 +381,30 @@ html, body {
   transform: scale(1.4);
 }
 
+/* Central Countdown Number Display on Pad */
+.pad-countdown-display {
+  font-family: var(--font-digital);
+  font-size: 2.2rem;
+  font-weight: 900;
+  color: var(--neon-orange);
+  text-shadow: 0 0 16px var(--neon-orange-glow);
+  animation: countdownPulse 0.9s infinite;
+  display: none;
+}
+
+.dj-pad.rec-countdown .pad-countdown-display {
+  display: block;
+}
+.dj-pad.rec-countdown .pad-indicator-dot {
+  display: none;
+}
+
+@keyframes countdownPulse {
+  0% { transform: scale(1.25); opacity: 0.7; }
+  50% { transform: scale(1.0); opacity: 1.0; }
+  100% { transform: scale(0.9); opacity: 0.8; }
+}
+
 .pad-bottom-meta {
   display: flex;
   justify-content: space-between;
@@ -380,33 +414,59 @@ html, body {
 
 .pad-title {
   font-family: var(--font-ui);
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.3px;
   color: var(--text-main);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 75%;
+  max-width: 68%;
 }
 
+/* Pad Quick Mic Recording Circle Button (〇) */
 .pad-quick-rec-btn {
-  background: transparent;
-  border: 1px solid var(--border-dim);
-  border-radius: 3px;
-  padding: 2px 3px;
-  color: var(--text-dim);
+  background: rgba(0, 0, 0, 0.45);
+  border: 1.5px solid var(--text-dim);
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--text-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .pad-quick-rec-btn:hover {
-  color: var(--neon-red);
+  color: #fff;
   border-color: var(--neon-red);
-  background: rgba(255, 23, 68, 0.15);
+  background: rgba(255, 23, 68, 0.25);
+  box-shadow: 0 0 8px var(--neon-red-glow);
+}
+
+.pad-quick-rec-btn.recording {
+  color: #fff;
+  border-color: var(--neon-red);
+  background: var(--neon-red);
+  box-shadow: 0 0 12px var(--neon-red-glow);
+  animation: pulseRecCircle 0.8s infinite;
+}
+
+.pad-quick-rec-btn.disabled,
+.pad-quick-rec-btn:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
+  pointer-events: none;
+  filter: grayscale(100%);
+}
+
+@keyframes pulseRecCircle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.18); box-shadow: 0 0 16px var(--neon-red); }
 }
 
 /* RIGHT COLUMN: Control Rack */
@@ -1151,7 +1211,7 @@ html, body {
   box-shadow: 0 0 12px rgba(0, 229, 255, 0.4);
 }
 
-/* Mic Assign Modal / Overlay Banner */
+/* Mic Assign & Countdown Overlay Banner */
 .mic-assign-banner {
   position: absolute;
   top: 10px;
@@ -1160,33 +1220,79 @@ html, body {
   background: rgba(16, 19, 28, 0.95);
   border: 2px solid var(--neon-red);
   border-radius: 8px;
-  padding: 8px 14px;
+  padding: 10px 14px;
   display: none;
   align-items: center;
   justify-content: space-between;
   backdrop-filter: blur(8px);
-  z-index: 10;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+  z-index: 20;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.85);
+  gap: 12px;
 }
 
 .mic-assign-banner.show {
   display: flex;
 }
 
+.mic-assign-banner.countdown {
+  border-color: var(--neon-orange);
+}
+
+.mic-assign-banner.warning {
+  border-color: var(--neon-yellow);
+}
+
 .mic-assign-text {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--neon-red);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mic-assign-banner.countdown .mic-assign-text {
+  color: var(--neon-orange);
+}
+
+.mic-assign-banner.warning .mic-assign-text {
+  color: var(--neon-yellow);
 }
 
 .mic-assign-cancel-btn {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.08);
   border: 1px solid var(--border-dim);
-  color: var(--text-muted);
-  padding: 3px 6px;
-  border-radius: 4px;
-  font-size: 0.65rem;
+  color: var(--text-main);
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 0.75rem;
+  font-weight: 700;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.mic-assign-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: var(--text-muted);
+}
+
+/* Exclusive Mode Lock: Disable BGM and Transport during Mic Recording */
+.transport-locked {
+  opacity: 0.3 !important;
+  pointer-events: none !important;
+  filter: grayscale(80%) !important;
+}
+
+/* Tabular numbers for all timer and counter values */
+.counter-value,
+.bpm-num,
+#recTime,
+.pad-num,
+.header-status-led span {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Responsive */
